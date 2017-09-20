@@ -8,8 +8,9 @@ class VM:
         self.pg = pg
         self.regs = [0] * REGISTER_COUNT
         self.code = code
-        self.memory = [0] * MEMORY_SEGMENT_COUNT * MEMORY_SEGMENT_SIZE
-        self.memory[ROM_SEGMENT_START * MEMORY_SEGMENT_SIZE:] = rom
+        self.memory = [0] * (MEMORY_SEGMENT_COUNT * MEMORY_SEGMENT_SIZE)
+        if rom != None:
+            self.memory[ROM_SEGMENT_START * MEMORY_SEGMENT_SIZE:] = rom
         self.pc = 0
         self.ipu = IPU()
         self.gpu = GPU(screen)
@@ -30,6 +31,10 @@ class VM:
             self.exec(instr)
             self.pc += 1
             self.gpu.update(self.memory)
+            if self.gpu.active == 1:
+                self.gpu.draw_background(self.memory)
+                self.gpu.draw_sprites(self.memory)
+            self.pg.display.flip()
             self.clock.tick(60)
 
     def decode(self, bin_instr):
@@ -90,7 +95,7 @@ class VM:
             self.regs[a0] = self.memory[a1 * MEMORY_SEGMENT_SIZE + a2]
         elif (op == STR):
             if self.regs[a1] < ROM_SEGMENT_START:
-                self.memory[a1 * MEMORY_SEGMENT_SIZE + a2] = self.regs[a0]
+                self.memory[self.regs[a1] * MEMORY_SEGMENT_SIZE + self.regs[a2]] = self.regs[a0]
             else:
                 print("Attempted illegal write to ROM")
                 #exit
