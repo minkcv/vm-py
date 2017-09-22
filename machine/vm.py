@@ -12,30 +12,33 @@ class VM:
         if rom != None:
             self.memory[ROM_SEGMENT_START * MEMORY_SEGMENT_SIZE:] = rom
         self.pc = 0
-        self.ipu = IPU()
+        self.ipu = IPU(pg)
         self.gpu = GPU(screen)
         self.clock = pg.time.Clock()
         self.running = False
 
     def run(self):
         self.running = True
+        display_start_time = self.pg.time.get_ticks()
+        display_wait_time = 16 # 16ms = about 60 refreshes per second
         while self.running:
             for event in self.pg.event.get():
                 if event.type == self.pg.QUIT:
                     self.pg.quit()
-                else:
-                    self.ipu.update(event, self.memory)
+                elif event.type == self.pg.KEYDOWN or event.type == self.pg.KEYUP:
+                    self.ipu.update(self.pg, self.memory)
                 
             bin_instr = self.code[self.pc]
             instr = self.decode(bin_instr)
             self.exec(instr)
             self.pc += 1
-            self.gpu.update(self.memory)
-            if self.gpu.active == 1:
-                self.gpu.draw_background(self.memory)
-                self.gpu.draw_sprites(self.memory)
-            self.pg.display.flip()
-            self.clock.tick(60)
+            if display_start_time + display_wait_time < self.pg.time.get_ticks():
+                self.gpu.update(self.memory)
+                if self.gpu.active == 1:
+                    self.gpu.draw_background(self.memory)
+                    self.gpu.draw_sprites(self.memory)
+                    self.pg.display.flip()
+                display_start_time = self.pg.time.get_ticks()
 
     def decode(self, bin_instr):
         clean = 0x000F
@@ -65,7 +68,7 @@ class VM:
             elif (a0 == EXT_LSR):
                 self.regs[a1] = self.regs[a1] >> self.regs[a2]
             elif (a0 == EXT_JMP):
-                self.pc = self.regs[a1] * JUMP_SEGMENT_SIZE + self.regs[a2] # need -1 here?
+                self.pc = self.regs[a1] * JUMP_SEGMENT_SIZE + self.regs[a2] - 1 # need -1 here?
             #elif (a0 == EXT_NOP):
         elif (op == ADD):
             self.regs[a0] = self.regs[a1] + self.regs[a2]
@@ -84,15 +87,15 @@ class VM:
                 self.regs[a0] = 1
         elif (op == JLT):
             if self.regs[a0] == 0:
-                self.pc = self.regs[a1] * JUMP_SEGMENT_SIZE + self.regs[a2]
+                self.pc = self.regs[a1] * JUMP_SEGMENT_SIZE + self.regs[a2] - 1
         elif (op == JGT):
             if self.regs[a0] == 2:
-                self.pc = self.regs[a1] * JUMP_SEGMENT_SIZE + self.regs[a2]
+                self.pc = self.regs[a1] * JUMP_SEGMENT_SIZE + self.regs[a2] - 1
         elif (op == JEQ):
             if self.regs[a0] == 1:
-                self.pc = self.regs[a1] * JUMP_SEGMENT_SIZE + self.regs[a2]
+                self.pc = self.regs[a1] * JUMP_SEGMENT_SIZE + self.regs[a2] - 1
         elif (op == LDR):
-            self.regs[a0] = self.memory[a1 * MEMORY_SEGMENT_SIZE + a2]
+            self.regs[a0] = self.memory[self.regs[a1] * MEMORY_SEGMENT_SIZE + self.regs[a2]]
         elif (op == STR):
             if self.regs[a1] < ROM_SEGMENT_START:
                 self.memory[self.regs[a1] * MEMORY_SEGMENT_SIZE + self.regs[a2]] = self.regs[a0]
